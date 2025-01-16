@@ -35,6 +35,11 @@ async function run() {
         const result = await userCollection.insertOne(user);
         res.send(result);
       });
+      app.post('/parcel',async(req,res)=>{
+        const parcel = req.body;
+        const result = await parcelCollection.insertOne(parcel)
+        res.send(result)
+      })
   
       
   
