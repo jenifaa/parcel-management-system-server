@@ -27,7 +27,7 @@ async function run() {
     //users data
 
     app.post("/users", async (req, res) => {
-      const { email, name, type, isSocialLogin } = req.body;
+      const { email, name, type, isSocialLogin, photoURL } = req.body;
 
       const existingUser = await userCollection.findOne({ email });
 
@@ -38,12 +38,36 @@ async function run() {
       const newUser = {
         email,
         name,
+        photoURL,
         type: type || "user",
         isSocialLogin: isSocialLogin || false,
       };
 
       const result = await userCollection.insertOne(newUser);
       res.send(result);
+    });
+    app.patch("/users", async (req, res) => {
+      const { email, photoURL } = req.body;
+
+      if (!email || !photoURL) {
+        return res
+          .status(400)
+          .send({ message: "Email and photoURL are required" });
+      }
+
+      const filter = { email }; // Filter using email to identify the user
+      const updateDoc = {
+        $set: {
+          photoURL, // Update the photoURL
+        },
+      };
+
+      try {
+        const result = await userCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update profile", error });
+      }
     });
 
     // app.post("/users", async (req, res) => {
@@ -67,12 +91,13 @@ async function run() {
       const user = await userCollection.findOne(query);
       let admin = false;
       if (user) {
-        if (user.role === "admin" && !user.isSocialLogin) {
+        if (user.type === "admin" && !user.isSocialLogin) {
           admin = true;
         }
       }
       res.send({ admin });
     });
+
     app.get("/users/deliveryMan/:email", async (req, res) => {
       const email = req.params.email;
 
@@ -80,7 +105,7 @@ async function run() {
       const user = await userCollection.findOne(query);
       let deliveryMan = false;
       if (user) {
-        deliveryMan = user?.role === "deliveryMan";
+        deliveryMan = user?.type === "deliveryMan";
       }
       res.send({ deliveryMan });
     });
@@ -90,7 +115,18 @@ async function run() {
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
+    app.get("/users/deliveryMan", async (req, res) => {
+      try {
+        const deliveryMen = await userCollection
+          .find({ type: "deliveryMan" })
+          .toArray();
 
+        res.send(deliveryMen);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to retrieve deliveryMen" });
+      }
+    });
     app.patch(
       "/users/admin/:id",
 
@@ -99,7 +135,7 @@ async function run() {
         const filter = { _id: new ObjectId(id) };
         const updateDoc = {
           $set: {
-            role: "admin",
+            type: "admin",
           },
         };
         const result = await userCollection.updateOne(filter, updateDoc);
@@ -114,7 +150,7 @@ async function run() {
         const filter = { _id: new ObjectId(id) };
         const updatedDoc = {
           $set: {
-            role: "deliveryMan",
+            type: "deliveryMan",
           },
         };
         const result = await userCollection.updateOne(filter, updatedDoc);
@@ -133,6 +169,16 @@ async function run() {
       const result = await parcelCollection.find(query).toArray();
       res.send(result);
     });
+    app.get("/parcel", async (req, res) => {
+      const result = await parcelCollection.find().toArray();
+      res.send(result);
+    });
+    // app.get("/totalParcel/:email", async (req, res) => {
+    //   const email = req.params.email;
+    //   const query = { email: email };
+    //   const result = await parcelCollection.find(query).toArray();
+    //   res.send(result);
+    // });
     app.get("/parcel/item/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -145,7 +191,6 @@ async function run() {
       const filter = { _id: new ObjectId(id) };
       const updatedDoc = {
         $set: {
-       
           phoneNumber: item.phoneNumber,
           parcelType: item.parcelType,
           parcelWeight: parseFloat(item.parcelWeight),
@@ -157,9 +202,8 @@ async function run() {
           addressLongitude: parseFloat(item.addressLongitude),
           price: item.price,
         },
-      
       };
-    
+
       const result = await parcelCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
