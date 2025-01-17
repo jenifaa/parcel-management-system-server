@@ -28,30 +28,23 @@ async function run() {
 
     app.post("/users", async (req, res) => {
       const { email, name, type, isSocialLogin } = req.body;
-    
+
       const existingUser = await userCollection.findOne({ email });
-    
+
       if (existingUser) {
         return res.send({ message: "User exists" });
       }
-    
+
       const newUser = {
         email,
         name,
-        type: type || "user", 
-        isSocialLogin: isSocialLogin || false, 
+        type: type || "user",
+        isSocialLogin: isSocialLogin || false,
       };
-    
+
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
-    
-
-
-
-
-
-
 
     // app.post("/users", async (req, res) => {
     //   const user = req.body;
@@ -97,7 +90,7 @@ async function run() {
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
-   
+
     app.patch(
       "/users/admin/:id",
 
@@ -138,6 +131,36 @@ async function run() {
       const email = req.params.email;
       const query = { email: email };
       const result = await parcelCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.get("/parcel/item/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await parcelCollection.findOne(query);
+      res.send(result);
+    });
+    app.patch("/parcel/item/:id", async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+       
+          phoneNumber: item.phoneNumber,
+          parcelType: item.parcelType,
+          parcelWeight: parseFloat(item.parcelWeight),
+          receiverName: item.receiverName,
+          receiverNumber: item.receiverNumber,
+          deliveryAddress: item.deliveryAddress,
+          requestedDeliveryDate: item.requestedDeliveryDate,
+          addressLatitude: parseFloat(item.addressLatitude),
+          addressLongitude: parseFloat(item.addressLongitude),
+          price: item.price,
+        },
+      
+      };
+    
+      const result = await parcelCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
 
