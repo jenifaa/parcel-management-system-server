@@ -49,25 +49,15 @@ async function run() {
     app.patch("/users", async (req, res) => {
       const { email, photoURL } = req.body;
 
-      if (!email || !photoURL) {
-        return res
-          .status(400)
-          .send({ message: "Email and photoURL are required" });
-      }
-
-      const filter = { email }; // Filter using email to identify the user
+      const filter = { email };
       const updateDoc = {
         $set: {
-          photoURL, // Update the photoURL
+          photoURL,
         },
       };
 
-      try {
-        const result = await userCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to update profile", error });
-      }
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
     // app.post("/users", async (req, res) => {
@@ -142,6 +132,7 @@ async function run() {
         res.send(result);
       }
     );
+
     app.patch(
       "/users/deliveryMan/:id",
 
@@ -158,6 +149,39 @@ async function run() {
       }
     );
     //parcel data
+    app.get("/parcels/deliveryMan/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const query = { deliveryManId: id };
+      const parcels = await parcelCollection.find(query).toArray();
+      res.send(parcels);
+    });
+    app.get("/parcels-delivery", async (req, res) => {
+      const parcels = await parcelCollection
+        .aggregate([
+          {
+            $lookup: {
+              from: "users",
+              localField: "deliveryManId",
+              foreignField: "_id",
+              as: "deliveryManDetails",
+            },
+          },
+
+          {
+            $unwind: "$deliveryManDetails",
+          },
+
+          {
+            $match: {
+              "deliveryManDetails.type": "deliveryMan",
+            },
+          },
+        ])
+        .toArray();
+      res.send(parcels);
+    });
+
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       const result = await parcelCollection.insertOne(parcel);
@@ -210,7 +234,7 @@ async function run() {
     app.put("/parcel/:id", async (req, res) => {
       const { id } = req.params;
       const { status, deliveryManId, approximateDeliveryDate } = req.body;
-    
+
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: {
@@ -219,7 +243,7 @@ async function run() {
           approximateDeliveryDate: approximateDeliveryDate,
         },
       };
-    
+
       const result = await parcelCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
