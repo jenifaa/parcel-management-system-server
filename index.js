@@ -207,6 +207,22 @@ async function run() {
       const result = await parcelCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
+    app.put("/parcel/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status, deliveryManId, approximateDeliveryDate } = req.body;
+    
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: status,
+          deliveryManId: deliveryManId,
+          approximateDeliveryDate: approximateDeliveryDate,
+        },
+      };
+    
+      const result = await parcelCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
     app.delete("/parcel/item/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
