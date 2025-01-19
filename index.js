@@ -156,6 +156,24 @@ async function run() {
       const parcels = await parcelCollection.find(query).toArray();
       res.send(parcels);
     });
+   
+    app.patch("/users/deliveryMan/:id", async (req, res) => {
+      const id = req.params.id;
+    
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          type: "deliveryMan", 
+        },
+      };
+    
+      const result = await userCollection.updateOne(filter, updateDoc);
+      if (result.modifiedCount === 1) {
+        res.status(200).send({ message: "User type updated to deliveryMan" });
+      } else {
+        res.status(400).send({ message: "Failed to update user type" });
+      }
+    });
     app.get("/parcels-delivery", async (req, res) => {
       const parcels = await parcelCollection
         .aggregate([
