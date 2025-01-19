@@ -31,7 +31,7 @@ async function run() {
     //users data
 
     app.post("/users", async (req, res) => {
-      const { email, name, type, isSocialLogin, photoURL } = req.body;
+      const { email, name, type, isSocialLogin, photoURL,phoneNumber } = req.body;
 
       const existingUser = await userCollection.findOne({ email });
 
@@ -47,6 +47,7 @@ async function run() {
         isSocialLogin: isSocialLogin || false,
         phoneNumber
       };
+      // console.log(newUser);
 
       const result = await userCollection.insertOne(newUser);
       res.send(result);
@@ -306,10 +307,25 @@ async function run() {
       const result = await parcelCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
-    app.delete("/parcel/item/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await parcelCollection.deleteOne(query);
+    // app.delete("/parcel/item/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id) };
+    //   const result = await parcelCollection.deleteOne(query);
+    //   res.send(result);
+    // });
+
+
+
+
+    app.patch("/parcel/cancel/:id", async (req, res) => {
+      const { id } = req.params;
+      const updatedStatus = req.body.status;
+    
+      const result = await parcelCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: updatedStatus } }
+      );
+    
       res.send(result);
     });
 
