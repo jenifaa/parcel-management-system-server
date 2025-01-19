@@ -24,6 +24,10 @@ async function run() {
   try {
     const parcelCollection = client.db("parcelDb").collection("Parcel");
     const userCollection = client.db("parcelDb").collection("users");
+    const notificationCollection = client
+      .db("parcelDb")
+      .collection("notifications");
+
     //users data
 
     app.post("/users", async (req, res) => {
@@ -41,6 +45,7 @@ async function run() {
         photoURL,
         type: type || "user",
         isSocialLogin: isSocialLogin || false,
+        phoneNumber
       };
 
       const result = await userCollection.insertOne(newUser);
@@ -156,17 +161,34 @@ async function run() {
       const parcels = await parcelCollection.find(query).toArray();
       res.send(parcels);
     });
-   
+
+    // app.post("/notifications", async (req, res) => {
+    //   const notificationData = req.body;
+
+    //   const result = await notificationCollection.insertOne(notificationData);
+    //   res.send(result);
+    // });
+    // app.get("/notifications", async (req, res) => {
+    //   const result = await notificationCollection.find().toArray();
+    //   res.send(result);
+    // });
+
     app.patch("/users/deliveryMan/:id", async (req, res) => {
-      const id = req.params.id;
-    
+      const { id } = req.params;
+      const { type } = req.body;
+      const notification = {
+        message: "Your request has been approved. Welcome as a Delivery Man!",
+        timestamp: new Date(),
+      };
+
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: {
-          type: "deliveryMan", 
+          type: "deliveryMan",
         },
+        $push: { notifications: notification },
       };
-    
+
       const result = await userCollection.updateOne(filter, updateDoc);
       if (result.modifiedCount === 1) {
         res.status(200).send({ message: "User type updated to deliveryMan" });
@@ -174,6 +196,25 @@ async function run() {
         res.status(400).send({ message: "Failed to update user type" });
       }
     });
+
+
+    app.get("/delivery/notifications", async (req, res) => {
+      try {
+         const deliveryNotifications = await userCollection
+            .find({ type: "deliveryMan" }) // Filter for delivery men
+            .project({ notifications: 1, name: 1, email: 1 }) // Include only notifications and basic details
+            .toArray();
+   
+         res.send(deliveryNotifications);
+      } catch (error) {
+         console.error(error);
+         res.status(500).send({ error: "Failed to retrieve notifications" });
+      }
+   });
+
+   
+
+
     app.get("/parcels-delivery", async (req, res) => {
       const parcels = await parcelCollection
         .aggregate([
