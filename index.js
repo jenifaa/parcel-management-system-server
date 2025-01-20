@@ -4,7 +4,7 @@ const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 5000;
-
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 app.use(cors());
 app.use(express.json());
 
@@ -27,11 +27,13 @@ async function run() {
     const notificationCollection = client
       .db("parcelDb")
       .collection("notifications");
+      const paymentCollection = client.db("parcelDb").collection("payments");
 
     //users data
 
     app.post("/users", async (req, res) => {
-      const { email, name, type, isSocialLogin, photoURL,phoneNumber } = req.body;
+      const { email, name, type, isSocialLogin, photoURL, phoneNumber } =
+        req.body;
 
       const existingUser = await userCollection.findOne({ email });
 
@@ -45,7 +47,7 @@ async function run() {
         photoURL,
         type: type || "user",
         isSocialLogin: isSocialLogin || false,
-        phoneNumber
+        phoneNumber,
       };
       // console.log(newUser);
 
@@ -198,23 +200,19 @@ async function run() {
       }
     });
 
-
     app.get("/delivery/notifications", async (req, res) => {
       try {
-         const deliveryNotifications = await userCollection
-            .find({ type: "deliveryMan" }) // Filter for delivery men
-            .project({ notifications: 1, name: 1, email: 1 }) // Include only notifications and basic details
-            .toArray();
-   
-         res.send(deliveryNotifications);
+        const deliveryNotifications = await userCollection
+          .find({ type: "deliveryMan" }) // Filter for delivery men
+          .project({ notifications: 1, name: 1, email: 1 }) // Include only notifications and basic details
+          .toArray();
+
+        res.send(deliveryNotifications);
       } catch (error) {
-         console.error(error);
-         res.status(500).send({ error: "Failed to retrieve notifications" });
+        console.error(error);
+        res.status(500).send({ error: "Failed to retrieve notifications" });
       }
-   });
-
-   
-
+    });
 
     app.get("/parcels-delivery", async (req, res) => {
       const parcels = await parcelCollection
@@ -253,17 +251,63 @@ async function run() {
       const result = await parcelCollection.find(query).toArray();
       res.send(result);
     });
+    // app.get("/parcel", async (req, res) => {
+    //   const { fromDate, toDate } = req.query;
+    //   if (fromDate && toDate) {
+    //     console.log(typeof(fromDate),toDate);
+    //     const parcels = await parcelCollection
+    //       .find({
+    //         requestedDeliveryDate: {
+    //           $gte: new Date(fromDate),
+    //           $lte: new Date(toDate),
+    //         },
+    //       })
+    //       .toArray();
+    //       console.log(parcels);
+    //     return res.send(parcels);
+    //   }
+    //   const result = await parcelCollection.find().toArray();
+    //   res.send(result);
+    // });
     app.get("/parcel", async (req, res) => {
+      const { fromDate, toDate } = req.query;
+      if (fromDate && toDate) {
+        console.log("From Date Type:", typeof fromDate);
+        console.log("To Date Type:", typeof toDate);
+        
+        // Parse the dates to make sure they are valid Date objects
+        const parsedFromDate = new Date(fromDate);
+        const parsedToDate = new Date(toDate);
+        
+        console.log("Parsed From Date:", parsedFromDate);
+        console.log("Parsed To Date:", parsedToDate);
+    
+        // Make sure to pass Date objects for MongoDB query
+        const parcels = await parcelCollection
+          .find({
+            requestedDeliveryDate: {
+              $gte: parsedFromDate,
+              $lte: parsedToDate,
+            },
+          })
+          .toArray();
+        
+        console.log(parcels);
+        return res.send(parcels);
+      }
+    
       const result = await parcelCollection.find().toArray();
       res.send(result);
     });
-    // app.get("/totalParcel/:email", async (req, res) => {
-    //   const email = req.params.email;
-    //   const query = { email: email };
-    //   const result = await parcelCollection.find(query).toArray();
-    //   res.send(result);
-    // });
+    
+   
     app.get("/parcel/item/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await parcelCollection.findOne(query);
+      res.send(result);
+    });
+    app.get("/parcel/booked/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await parcelCollection.findOne(query);
@@ -307,27 +351,41 @@ async function run() {
       const result = await parcelCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
-    // app.delete("/parcel/item/:id", async (req, res) => {
-    //   const id = req.params.id;
-    //   const query = { _id: new ObjectId(id) };
-    //   const result = await parcelCollection.deleteOne(query);
-    //   res.send(result);
-    // });
-
-
-
+    
 
     app.patch("/parcel/cancel/:id", async (req, res) => {
       const { id } = req.params;
       const updatedStatus = req.body.status;
-    
+
       const result = await parcelCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: updatedStatus } }
       );
-    
+
       res.send(result);
     });
+
+
+     //payment Intent
+     app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+     
+      
+      res.send(paymentResult);
+    });
+   
 
     // await client.db("admin").command({ ping: 1 });
     console.log(
