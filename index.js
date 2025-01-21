@@ -27,7 +27,8 @@ async function run() {
     const notificationCollection = client
       .db("parcelDb")
       .collection("notifications");
-      const paymentCollection = client.db("parcelDb").collection("payments");
+    const paymentCollection = client.db("parcelDb").collection("payments");
+    const reviewCollection = client.db("parcelDb").collection("reviews");
 
     //users data
 
@@ -165,17 +166,6 @@ async function run() {
       res.send(parcels);
     });
 
-    // app.post("/notifications", async (req, res) => {
-    //   const notificationData = req.body;
-
-    //   const result = await notificationCollection.insertOne(notificationData);
-    //   res.send(result);
-    // });
-    // app.get("/notifications", async (req, res) => {
-    //   const result = await notificationCollection.find().toArray();
-    //   res.send(result);
-    // });
-
     app.patch("/users/deliveryMan/:id", async (req, res) => {
       const { id } = req.params;
       const { type } = req.body;
@@ -214,6 +204,34 @@ async function run() {
       }
     });
 
+    // app.get("/parcels-delivery", async (req, res) => {
+    //   const parcels = await parcelCollection
+    //     .aggregate([
+    //       {
+    //         $unwind: "$deliveryManId",
+    //       },
+    //       {
+    //         $lookup: {
+    //           from: "users",
+    //           localField: "deliveryManId",
+    //           foreignField: "_id",
+    //           as: "deliveryManDetails",
+    //         },
+    //       },
+
+    //       {
+    //         $unwind: "$deliveryManDetails",
+    //       },
+
+    //       {
+    //         $match: {
+    //           "deliveryManDetails.type": "deliveryMan",
+    //         },
+    //       },
+    //     ])
+    //     .toArray();
+    //   res.send(parcels);
+    // });
     app.get("/parcels-delivery", async (req, res) => {
       const parcels = await parcelCollection
         .aggregate([
@@ -225,18 +243,44 @@ async function run() {
               as: "deliveryManDetails",
             },
           },
-
           {
-            $unwind: "$deliveryManDetails",
+            $unwind: "$deliveryManDetails", 
           },
-
-          {
-            $match: {
-              "deliveryManDetails.type": "deliveryMan",
-            },
-          },
+          // {
+          //   $match: {
+          //     "deliveryManDetails.type": "deliveryMan", 
+          //   },
+          // },
+          // {
+          //   $project: {
+          //     addressLatitude: 1,
+          //     addressLongitude: 1,
+          //     approximateDeliveryDate: 1,
+          //     deliveryAddress: 1,
+          //     deliveryManDetails: {
+          //       email: "$deliveryManDetails.email",
+          //       name: "$deliveryManDetails.name",
+          //       role: "$deliveryManDetails.role",
+          //       type: "$deliveryManDetails.type",
+          //       _id: "$deliveryManDetails._id",
+          //     },
+          //     deliveryManId: 1,
+          //     email: 1,
+          //     name: 1,
+          //     parcelType: 1,
+          //     parcelWeight: 1,
+          //     phoneNumber: 1,
+          //     price: 1,
+          //     receiverName: 1,
+          //     receiverNumber: 1,
+          //     requestedDeliveryDate: 1,
+          //     status: 1,
+          //     _id: 1,
+          //   },
+          // },
         ])
         .toArray();
+      // console.log(parcels);
       res.send(parcels);
     });
 
@@ -274,14 +318,14 @@ async function run() {
       if (fromDate && toDate) {
         console.log("From Date Type:", typeof fromDate);
         console.log("To Date Type:", typeof toDate);
-        
+
         // Parse the dates to make sure they are valid Date objects
         const parsedFromDate = new Date(fromDate);
         const parsedToDate = new Date(toDate);
-        
+
         console.log("Parsed From Date:", parsedFromDate);
         console.log("Parsed To Date:", parsedToDate);
-    
+
         // Make sure to pass Date objects for MongoDB query
         const parcels = await parcelCollection
           .find({
@@ -291,16 +335,15 @@ async function run() {
             },
           })
           .toArray();
-        
+
         console.log(parcels);
         return res.send(parcels);
       }
-    
+
       const result = await parcelCollection.find().toArray();
       res.send(result);
     });
-    
-   
+
     app.get("/parcel/item/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -351,23 +394,31 @@ async function run() {
       const result = await parcelCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
-    
+    app.patch("/parcel/delivery/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updatedStatus = {
+        $set: {
+          status: status,
+        },
+      };
+      const result = await parcelCollection.updateOne(filter, updatedStatus);
+      res.send(result);
+    });
 
-    app.patch("/parcel/cancel/:id", async (req, res) => {
+    app.delete("/parcel/cancel/:id", async (req, res) => {
       const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
       const updatedStatus = req.body.status;
 
-      const result = await parcelCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: updatedStatus } }
-      );
+      const result = await parcelCollection.deleteOne(query);
 
       res.send(result);
     });
 
-
-     //payment Intent
-     app.post("/create-payment-intent", async (req, res) => {
+    //payment Intent
+    app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
@@ -381,11 +432,29 @@ async function run() {
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
-     
-      
+
       res.send(paymentResult);
     });
-   
+    app.get("/payments", async (req, res) => {
+      const paymentResult = await paymentCollection.find().toArray();
+
+      res.send(paymentResult);
+    });
+    app.get("/payments/:email", async (req, res) => {
+      const query = { email: req.params.email };
+
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.post("/reviews", async (req, res) => {
+      const reviewData = req.body;
+      const result = await reviewCollection.insertOne(reviewData);
+      res.send(result);
+    });
+    app.get("/reviews", async (req, res) => {
+      const result = await reviewCollection.find().toArray();
+      res.send(result);
+    });
 
     // await client.db("admin").command({ ping: 1 });
     console.log(
