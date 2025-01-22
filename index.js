@@ -29,6 +29,30 @@ async function run() {
       .collection("notifications");
     const paymentCollection = client.db("parcelDb").collection("payments");
     const reviewCollection = client.db("parcelDb").collection("reviews");
+    //jwt toke
+    const verifyToken = (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Unauthorize access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if (error) {
+          return res.status(401).send({ message: "Unauthorize access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
 
     //users data
 
@@ -55,7 +79,7 @@ async function run() {
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
-    app.patch("/users", async (req, res) => {
+    app.patch("/users", verifyToken, async (req, res) => {
       const { email, photoURL } = req.body;
 
       const filter = { email };
@@ -79,11 +103,11 @@ async function run() {
     //   const result = await userCollection.insertOne(user);
     //   res.send(result);
     // });
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
-    app.get("/users/admin/:email", async (req, res) => {
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
 
       const query = { email: email };
@@ -114,21 +138,27 @@ async function run() {
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
-    app.get("/users/deliveryMan", async (req, res) => {
-      try {
-        const deliveryMen = await userCollection
-          .find({ type: "deliveryMan" })
-          .toArray();
+    app.get(
+      "/users/deliveryMan",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const deliveryMen = await userCollection
+            .find({ type: "deliveryMan" })
+            .toArray();
 
-        res.send(deliveryMen);
-      } catch (error) {
-        console.error(error);
-        res.status(500).send({ error: "Failed to retrieve deliveryMen" });
+          res.send(deliveryMen);
+        } catch (error) {
+          console.error(error);
+          res.status(500).send({ error: "Failed to retrieve deliveryMen" });
+        }
       }
-    });
+    );
     app.patch(
       "/users/admin/:id",
-
+      verifyToken,
+      verifyAdmin,
       async (req, res) => {
         const id = req.params.id;
         const filter = { _id: new ObjectId(id) };
@@ -144,6 +174,8 @@ async function run() {
 
     app.patch(
       "/users/deliveryMan/:id",
+      verifyToken,
+      verifyAdmin,
 
       async (req, res) => {
         const id = req.params.id;
@@ -158,7 +190,7 @@ async function run() {
       }
     );
     //parcel data
-    app.get("/parcels/deliveryMan/:id", async (req, res) => {
+    app.get("/parcels/deliveryMan/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
 
       const query = { deliveryManId: id };
@@ -193,8 +225,8 @@ async function run() {
     app.get("/delivery/notifications", async (req, res) => {
       try {
         const deliveryNotifications = await userCollection
-          .find({ type: "deliveryMan" }) // Filter for delivery men
-          .project({ notifications: 1, name: 1, email: 1 }) // Include only notifications and basic details
+          .find({ type: "deliveryMan" })
+          .project({ notifications: 1, name: 1, email: 1 })
           .toArray();
 
         res.send(deliveryNotifications);
@@ -244,11 +276,11 @@ async function run() {
             },
           },
           {
-            $unwind: "$deliveryManDetails", 
+            $unwind: "$deliveryManDetails",
           },
           // {
           //   $match: {
-          //     "deliveryManDetails.type": "deliveryMan", 
+          //     "deliveryManDetails.type": "deliveryMan",
           //   },
           // },
           // {
@@ -284,12 +316,12 @@ async function run() {
       res.send(parcels);
     });
 
-    app.post("/parcel", async (req, res) => {
+    app.post("/parcel", verifyToken, async (req, res) => {
       const parcel = req.body;
       const result = await parcelCollection.insertOne(parcel);
       res.send(result);
     });
-    app.get("/parcel/:email", async (req, res) => {
+    app.get("/parcel/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const result = await parcelCollection.find(query).toArray();
@@ -313,7 +345,7 @@ async function run() {
     //   const result = await parcelCollection.find().toArray();
     //   res.send(result);
     // });
-    app.get("/parcel", async (req, res) => {
+    app.get("/parcel", verifyToken, verifyAdmin, async (req, res) => {
       const { fromDate, toDate } = req.query;
       if (fromDate && toDate) {
         console.log("From Date Type:", typeof fromDate);
@@ -435,12 +467,12 @@ async function run() {
 
       res.send(paymentResult);
     });
-    app.get("/payments", async (req, res) => {
+    app.get("/payments", verifyToken, async (req, res) => {
       const paymentResult = await paymentCollection.find().toArray();
 
       res.send(paymentResult);
     });
-    app.get("/payments/:email", async (req, res) => {
+    app.get("/payments/:email", verifyToken, async (req, res) => {
       const query = { email: req.params.email };
 
       const result = await paymentCollection.find(query).toArray();
@@ -451,9 +483,24 @@ async function run() {
       const result = await reviewCollection.insertOne(reviewData);
       res.send(result);
     });
-    app.get("/reviews", async (req, res) => {
+    app.get("/reviews", verifyToken, verifyAdmin, async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
+    });
+    app.get("/reviews/:deliveryManId", async (req, res) => {
+      const { deliveryManId } = req.params;
+
+      const reviews = await reviewCollection.find({ deliveryManId }).toArray();
+
+      res.send(reviews);
+    });
+    //jwt
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "5h",
+      });
+      res.send({ token });
     });
 
     // await client.db("admin").command({ ping: 1 });
