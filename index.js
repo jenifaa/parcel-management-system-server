@@ -79,7 +79,7 @@ async function run() {
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
-    app.patch("/users", verifyToken, async (req, res) => {
+    app.patch("/users", async (req, res) => {
       const { email, photoURL } = req.body;
 
       const filter = { email };
@@ -93,21 +93,21 @@ async function run() {
       res.send(result);
     });
 
-    // app.post("/users", async (req, res) => {
-    //   const user = req.body;
-    //   const query = { email: user.email };
-    //   const existingUser = await userCollection.findOne(query);
-    //   if (existingUser) {
-    //     return res.send({ message: "user already exist", insertedId: null });
-    //   }
-    //   const result = await userCollection.insertOne(user);
-    //   res.send(result);
-    // });
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
-    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+    app.get("/notification", async (req, res) => {
+      const result = await userCollection.find({ type: "pending" }).toArray();
+      res.send(result);
+    });
+    app.get("/find/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await userCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
 
       const query = { email: email };
@@ -140,8 +140,7 @@ async function run() {
     });
     app.get(
       "/users/deliveryMan",
-      verifyToken,
-      verifyAdmin,
+
       async (req, res) => {
         try {
           const deliveryMen = await userCollection
@@ -157,8 +156,7 @@ async function run() {
     );
     app.patch(
       "/users/admin/:id",
-      verifyToken,
-      verifyAdmin,
+
       async (req, res) => {
         const id = req.params.id;
         const filter = { _id: new ObjectId(id) };
@@ -174,8 +172,6 @@ async function run() {
 
     app.patch(
       "/users/deliveryMan/:id",
-      verifyToken,
-      verifyAdmin,
 
       async (req, res) => {
         const id = req.params.id;
@@ -190,7 +186,7 @@ async function run() {
       }
     );
     //parcel data
-    app.get("/parcels/deliveryMan/:id", verifyToken, async (req, res) => {
+    app.get("/parcels/deliveryMan/:id", async (req, res) => {
       const { id } = req.params;
 
       const query = { deliveryManId: id };
@@ -236,129 +232,90 @@ async function run() {
       }
     });
 
+    //aggragation..........
+
     // app.get("/parcels-delivery", async (req, res) => {
-    //   const parcels = await parcelCollection
-    //     .aggregate([
-    //       {
-    //         $unwind: "$deliveryManId",
-    //       },
-    //       {
-    //         $lookup: {
-    //           from: "users",
-    //           localField: "deliveryManId",
-    //           foreignField: "_id",
-    //           as: "deliveryManDetails",
-    //         },
-    //       },
+    //   const parcels = await parcelCollection// .aggregate([
+    //   //   {
+    //   //     $lookup: {
+    //   //       from: "users",
+    //   //       localField: "deliveryManId",
+    //   //       foreignField: "_id",
+    //   //       as: "deliveryManDetails",
+    //   //     },
+    //   //   },
+    //   //   {
+    //   //     $unwind: "$deliveryManDetails",
+    //   //   },
+    //   //   {
+    //   //     $match: {
+    //   //       "deliveryManDetails.type": "deliveryMan",
+    //   //     },
+    //   //   },
+    //   //   {
+    //   //     $project: {
+    //   //       addressLatitude: 1,
+    //   //       addressLongitude: 1,
+    //   //       approximateDeliveryDate: 1,
+    //   //       deliveryAddress: 1,
+    //   //       deliveryManDetails: {
+    //   //         email: "$deliveryManDetails.email",
+    //   //         name: "$deliveryManDetails.name",
+    //   //         role: "$deliveryManDetails.role",
+    //   //         type: "$deliveryManDetails.type",
+    //   //         _id: "$deliveryManDetails._id",
+    //   //       },
+    //   //       deliveryManId: 1,
+    //   //       email: 1,
+    //   //       name: 1,
+    //   //       parcelType: 1,
+    //   //       parcelWeight: 1,
+    //   //       phoneNumber: 1,
+    //   //       price: 1,
+    //   //       receiverName: 1,
+    //   //       receiverNumber: 1,
+    //   //       requestedDeliveryDate: 1,
+    //   //       status: 1,
+    //   //       _id: 1,
+    //   //     },
+    //   //   },
+    //   // ])
+    //   // .toArray();
+    //   // console.log(parcels);
 
-    //       {
-    //         $unwind: "$deliveryManDetails",
-    //       },
-
-    //       {
-    //         $match: {
-    //           "deliveryManDetails.type": "deliveryMan",
-    //         },
-    //       },
-    //     ])
-    //     .toArray();
-    //   res.send(parcels);
+    //   .res
+    //     .send(parcels);
     // });
-    app.get("/parcels-delivery", async (req, res) => {
-      const parcels = await parcelCollection
-        .aggregate([
-          {
-            $lookup: {
-              from: "users",
-              localField: "deliveryManId",
-              foreignField: "_id",
-              as: "deliveryManDetails",
-            },
-          },
-          {
-            $unwind: "$deliveryManDetails",
-          },
-          // {
-          //   $match: {
-          //     "deliveryManDetails.type": "deliveryMan",
-          //   },
-          // },
-          // {
-          //   $project: {
-          //     addressLatitude: 1,
-          //     addressLongitude: 1,
-          //     approximateDeliveryDate: 1,
-          //     deliveryAddress: 1,
-          //     deliveryManDetails: {
-          //       email: "$deliveryManDetails.email",
-          //       name: "$deliveryManDetails.name",
-          //       role: "$deliveryManDetails.role",
-          //       type: "$deliveryManDetails.type",
-          //       _id: "$deliveryManDetails._id",
-          //     },
-          //     deliveryManId: 1,
-          //     email: 1,
-          //     name: 1,
-          //     parcelType: 1,
-          //     parcelWeight: 1,
-          //     phoneNumber: 1,
-          //     price: 1,
-          //     receiverName: 1,
-          //     receiverNumber: 1,
-          //     requestedDeliveryDate: 1,
-          //     status: 1,
-          //     _id: 1,
-          //   },
-          // },
-        ])
-        .toArray();
-      // console.log(parcels);
-      res.send(parcels);
-    });
 
-    app.post("/parcel", verifyToken, async (req, res) => {
+    app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       const result = await parcelCollection.insertOne(parcel);
       res.send(result);
     });
-    app.get("/parcel/:email", verifyToken, async (req, res) => {
+    app.get("/parcel/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const result = await parcelCollection.find(query).toArray();
       res.send(result);
     });
-    // app.get("/parcel", async (req, res) => {
-    //   const { fromDate, toDate } = req.query;
-    //   if (fromDate && toDate) {
-    //     console.log(typeof(fromDate),toDate);
-    //     const parcels = await parcelCollection
-    //       .find({
-    //         requestedDeliveryDate: {
-    //           $gte: new Date(fromDate),
-    //           $lte: new Date(toDate),
-    //         },
-    //       })
-    //       .toArray();
-    //       console.log(parcels);
-    //     return res.send(parcels);
-    //   }
-    //   const result = await parcelCollection.find().toArray();
-    //   res.send(result);
-    // });
     app.get("/parcel", verifyToken, verifyAdmin, async (req, res) => {
+      const result = await parcelCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/parcels/all", async (req, res) => {
       const { fromDate, toDate } = req.query;
+      console.log(req.query);
       if (fromDate && toDate) {
         console.log("From Date Type:", typeof fromDate);
         console.log("To Date Type:", typeof toDate);
 
-        // Parse the dates to make sure they are valid Date objects
         const parsedFromDate = new Date(fromDate);
         const parsedToDate = new Date(toDate);
 
         console.log("Parsed From Date:", parsedFromDate);
         console.log("Parsed To Date:", parsedToDate);
 
-        // Make sure to pass Date objects for MongoDB query
         const parcels = await parcelCollection
           .find({
             requestedDeliveryDate: {
@@ -410,22 +367,69 @@ async function run() {
       const result = await parcelCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
-    app.put("/parcel/:id", async (req, res) => {
-      const { id } = req.params;
-      const { status, deliveryManId, approximateDeliveryDate } = req.body;
+    // app.put("/parcel/:id", async (req, res) => {
+    //   const { id } = req.params;
+    //   const { status, deliveryManId, approximateDeliveryDate } = req.body;
 
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          status: status,
-          deliveryManId: deliveryManId,
-          approximateDeliveryDate: approximateDeliveryDate,
-        },
-      };
+    //   const filter = { _id: new ObjectId(id) };
+    //   const updateDoc = {
+    //     $set: {
+    //       status: status,
+    //       deliveryManId: deliveryManId,
+    //       approximateDeliveryDate: approximateDeliveryDate,
+    //     },
+    //   };
 
-      const result = await parcelCollection.updateOne(filter, updateDoc);
+    //   const result = await parcelCollection.updateOne(filter, updateDoc);
+    //   res.send(result);
+    // });
+
+    app.put("/managing/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status, deliveryManId, approximateDeliveryDate } = req.body;
+        const deliver = await userCollection.findOne({
+          _id: new ObjectId(deliveryManId),
+        });
+
+        // console.log(deli);
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status: status,
+            deliveryManId: deliveryManId,
+            approximateDeliveryDate: approximateDeliveryDate,
+            deliveryManDetails: deliver?.email,
+          },
+        };
+        console.log(updateDoc);
+        const result = await parcelCollection.updateOne(filter, updateDoc);
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating parcel:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+    app.get("/deli-parcels/:email", async (req, res) => {
+      const email = req.params.email;
+      const { deliveryManDetails } = req.query;
+      console.log(deliveryManDetails);
+      // const query = { deliveryManDetails: email };
+      const result = await parcelCollection
+        .find({
+          deliveryManDetails: {
+            $exists: true,
+            $in: [email],
+          },
+        })
+        .toArray();
+
+      console.log(result);
       res.send(result);
     });
+
     app.patch("/parcel/delivery/:id", async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
@@ -472,7 +476,7 @@ async function run() {
 
       res.send(paymentResult);
     });
-    app.get("/payments/:email", verifyToken, async (req, res) => {
+    app.get("/payments/:email", async (req, res) => {
       const query = { email: req.params.email };
 
       const result = await paymentCollection.find(query).toArray();
@@ -483,7 +487,7 @@ async function run() {
       const result = await reviewCollection.insertOne(reviewData);
       res.send(result);
     });
-    app.get("/reviews", verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
     });
@@ -501,6 +505,19 @@ async function run() {
         expiresIn: "5h",
       });
       res.send({ token });
+    });
+
+    app.get("/stat", async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const parcels = await parcelCollection.estimatedDocumentCount();
+      // const query = await parcelCollection.find
+      // const query = await parcelCollection.find({status: "Delivered"}).toArray();
+      // console.log(query);
+
+      const delivered = await parcelCollection.countDocuments({
+        status: "Delivered",
+      });
+      res.send({ users, parcels, delivered });
     });
 
     // await client.db("admin").command({ ping: 1 });
