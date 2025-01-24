@@ -232,61 +232,6 @@ async function run() {
       }
     });
 
-    //aggragation..........
-
-    // app.get("/parcels-delivery", async (req, res) => {
-    //   const parcels = await parcelCollection// .aggregate([
-    //   //   {
-    //   //     $lookup: {
-    //   //       from: "users",
-    //   //       localField: "deliveryManId",
-    //   //       foreignField: "_id",
-    //   //       as: "deliveryManDetails",
-    //   //     },
-    //   //   },
-    //   //   {
-    //   //     $unwind: "$deliveryManDetails",
-    //   //   },
-    //   //   {
-    //   //     $match: {
-    //   //       "deliveryManDetails.type": "deliveryMan",
-    //   //     },
-    //   //   },
-    //   //   {
-    //   //     $project: {
-    //   //       addressLatitude: 1,
-    //   //       addressLongitude: 1,
-    //   //       approximateDeliveryDate: 1,
-    //   //       deliveryAddress: 1,
-    //   //       deliveryManDetails: {
-    //   //         email: "$deliveryManDetails.email",
-    //   //         name: "$deliveryManDetails.name",
-    //   //         role: "$deliveryManDetails.role",
-    //   //         type: "$deliveryManDetails.type",
-    //   //         _id: "$deliveryManDetails._id",
-    //   //       },
-    //   //       deliveryManId: 1,
-    //   //       email: 1,
-    //   //       name: 1,
-    //   //       parcelType: 1,
-    //   //       parcelWeight: 1,
-    //   //       phoneNumber: 1,
-    //   //       price: 1,
-    //   //       receiverName: 1,
-    //   //       receiverNumber: 1,
-    //   //       requestedDeliveryDate: 1,
-    //   //       status: 1,
-    //   //       _id: 1,
-    //   //     },
-    //   //   },
-    //   // ])
-    //   // .toArray();
-    //   // console.log(parcels);
-
-    //   .res
-    //     .send(parcels);
-    // });
-
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       const result = await parcelCollection.insertOne(parcel);
@@ -403,7 +348,7 @@ async function run() {
             deliveryManDetails: deliver?.email,
           },
         };
-        console.log(updateDoc);
+        // console.log(updateDoc);
         const result = await parcelCollection.updateOne(filter, updateDoc);
 
         res.send(result);
@@ -414,9 +359,7 @@ async function run() {
     });
     app.get("/deli-parcels/:email", async (req, res) => {
       const email = req.params.email;
-      const { deliveryManDetails } = req.query;
-      console.log(deliveryManDetails);
-      // const query = { deliveryManDetails: email };
+
       const result = await parcelCollection
         .find({
           deliveryManDetails: {
@@ -426,21 +369,69 @@ async function run() {
         })
         .toArray();
 
-      console.log(result);
       res.send(result);
     });
 
+    // app.patch("/parcel/delivery/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const { deliveryManId } = req.body;
+    //   const { status } = req.body;
+    //   const filter = { _id: new ObjectId(id) };
+    //   const updatedStatus = {
+    //     $set: {
+    //       status: status,
+    //     },
+    //   };
+    //   const deliveryMan = await userCollection.findOne({ _id: deliveryManId });
+    //   if (deliveryMan) {
+    //     const updatedDeliveryMan = {
+    //       $inc: { deliveryCount: 1 }, // Increment deliveryCount by 1
+    //     };
+    //     await userCollection.updateOne(
+    //       { _id: deliveryMan._id },
+    //       updatedDeliveryMan
+    //     );
+    //   }
+    //   const result = await parcelCollection.updateOne(filter, updatedStatus);
+    //   res.send(result);
+    // });
+
     app.patch("/parcel/delivery/:id", async (req, res) => {
-      const id = req.params.id;
-      const { status } = req.body;
-      const filter = { _id: new ObjectId(id) };
-      const updatedStatus = {
-        $set: {
-          status: status,
-        },
-      };
-      const result = await parcelCollection.updateOne(filter, updatedStatus);
-      res.send(result);
+      try {
+        const id = req.params.id;
+        const { deliveryManId, status } = req.body;
+        console.log(status);
+
+        const filter = { _id: new ObjectId(id) };
+        const updatedStatus = {
+          $set: {
+            status: status,
+          },
+        };
+
+        // console.log(deliveryManId);
+
+        if (deliveryManId) {
+          const deliveryMan = await userCollection.findOne({
+            _id: new ObjectId(deliveryManId),
+          });
+          // console.log(deliveryMan);
+          if (deliveryMan) {
+            const updatedDeliveryMan = {
+              $inc: { deliveryCount: 1 },
+            };
+            await userCollection.updateOne(
+              { _id: deliveryMan._id },
+              updatedDeliveryMan
+            );
+          }
+        }
+        const result = await parcelCollection.updateOne(filter, updatedStatus);
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating parcel and delivery man:", error);
+        res.status(500).send("Internal Server Error");
+      }
     });
 
     app.delete("/parcel/cancel/:id", async (req, res) => {
@@ -451,6 +442,15 @@ async function run() {
       const result = await parcelCollection.deleteOne(query);
 
       res.send(result);
+    });
+    app.get("/top-deliveryMan", async (req, res) => {
+      const topUsers = await userCollection
+        .find()
+        .sort({ deliveryCount: -1 })
+        .limit(3)
+        .toArray();
+
+      res.send(topUsers);
     });
 
     //payment Intent
@@ -485,18 +485,43 @@ async function run() {
     app.post("/reviews", async (req, res) => {
       const reviewData = req.body;
       const result = await reviewCollection.insertOne(reviewData);
+
+      // console.log(reviewData.deliveryManId);
+
+      if (reviewData.deliveryManId) {
+        const deliveryMan = await userCollection.findOne({
+          _id: new ObjectId(reviewData.deliveryManId),
+        });
+        // console.log(deliveryMan);
+        if (deliveryMan) {
+          const updatedDeliveryMan = {
+            $inc: { reviewCount: 1 },
+          };
+          await userCollection.updateOne(
+            { _id: deliveryMan._id },
+            updatedDeliveryMan
+          );
+        }
+      }
       res.send(result);
     });
     app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
     });
-    app.get("/reviews/:deliveryManId", async (req, res) => {
-      const { deliveryManId } = req.params;
+    app.get("/reviews/:email", async (req, res) => {
+      const email = req.params.email;
 
-      const reviews = await reviewCollection.find({ deliveryManId }).toArray();
+      const result = await reviewCollection
+        .find({
+          deliveryManEmail: {
+            $exists: true,
+            $in: [email],
+          },
+        })
+        .toArray();
 
-      res.send(reviews);
+      res.send(result);
     });
     //jwt
     app.post("/jwt", async (req, res) => {
