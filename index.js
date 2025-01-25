@@ -5,7 +5,15 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 5000;
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://parcel-management-2333e.web.app",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -47,7 +55,7 @@ async function run() {
       const email = req.decoded.email;
       const query = { email: email };
       const user = await userCollection.findOne(query);
-      const isAdmin = user?.role === "admin";
+      const isAdmin = user?.type === "admin";
       if (!isAdmin) {
         return res.status(403).send({ message: "Forbidden Access" });
       }
@@ -74,7 +82,6 @@ async function run() {
         isSocialLogin: isSocialLogin || false,
         phoneNumber,
       };
-      // console.log(newUser);
 
       const result = await userCollection.insertOne(newUser);
       res.send(result);
@@ -156,6 +163,8 @@ async function run() {
     );
     app.patch(
       "/users/admin/:id",
+      verifyToken,
+      verifyAdmin,
 
       async (req, res) => {
         const id = req.params.id;
@@ -172,6 +181,8 @@ async function run() {
 
     app.patch(
       "/users/deliveryMan/:id",
+      verifyToken,
+      verifyAdmin,
 
       async (req, res) => {
         const id = req.params.id;
@@ -243,6 +254,7 @@ async function run() {
       const result = await parcelCollection.find(query).toArray();
       res.send(result);
     });
+
     app.get("/parcel", verifyToken, verifyAdmin, async (req, res) => {
       const result = await parcelCollection.find().toArray();
       res.send(result);
@@ -250,16 +262,10 @@ async function run() {
 
     app.get("/parcels/all", async (req, res) => {
       const { fromDate, toDate } = req.query;
-      console.log(req.query);
+    
       if (fromDate && toDate) {
-        console.log("From Date Type:", typeof fromDate);
-        console.log("To Date Type:", typeof toDate);
-
         const parsedFromDate = new Date(fromDate);
         const parsedToDate = new Date(toDate);
-
-        console.log("Parsed From Date:", parsedFromDate);
-        console.log("Parsed To Date:", parsedToDate);
 
         const parcels = await parcelCollection
           .find({
@@ -270,12 +276,8 @@ async function run() {
           })
           .toArray();
 
-        console.log(parcels);
         return res.send(parcels);
       }
-
-      const result = await parcelCollection.find().toArray();
-      res.send(result);
     });
 
     app.get("/parcel/item/:id", async (req, res) => {
@@ -329,15 +331,13 @@ async function run() {
     //   res.send(result);
     // });
 
-    app.put("/managing/:id", async (req, res) => {
+    app.put("/managing/:id", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         const { status, deliveryManId, approximateDeliveryDate } = req.body;
         const deliver = await userCollection.findOne({
           _id: new ObjectId(deliveryManId),
         });
-
-        // console.log(deli);
 
         const filter = { _id: new ObjectId(id) };
         const updateDoc = {
@@ -348,7 +348,7 @@ async function run() {
             deliveryManDetails: deliver?.email,
           },
         };
-        // console.log(updateDoc);
+
         const result = await parcelCollection.updateOne(filter, updateDoc);
 
         res.send(result);
@@ -400,7 +400,6 @@ async function run() {
       try {
         const id = req.params.id;
         const { deliveryManId, status } = req.body;
-        console.log(status);
 
         const filter = { _id: new ObjectId(id) };
         const updatedStatus = {
@@ -409,13 +408,11 @@ async function run() {
           },
         };
 
-        // console.log(deliveryManId);
-
         if (deliveryManId) {
           const deliveryMan = await userCollection.findOne({
             _id: new ObjectId(deliveryManId),
           });
-          // console.log(deliveryMan);
+
           if (deliveryMan) {
             const updatedDeliveryMan = {
               $inc: { deliveryCount: 1 },
@@ -471,7 +468,7 @@ async function run() {
 
       res.send(paymentResult);
     });
-    app.get("/payments", verifyToken, async (req, res) => {
+    app.get("/payments", verifyToken, verifyAdmin, async (req, res) => {
       const paymentResult = await paymentCollection.find().toArray();
 
       res.send(paymentResult);
@@ -486,13 +483,11 @@ async function run() {
       const reviewData = req.body;
       const result = await reviewCollection.insertOne(reviewData);
 
-      // console.log(reviewData.deliveryManId);
-
       if (reviewData.deliveryManId) {
         const deliveryMan = await userCollection.findOne({
           _id: new ObjectId(reviewData.deliveryManId),
         });
-        // console.log(deliveryMan);
+
         if (deliveryMan) {
           const updatedDeliveryMan = {
             $inc: { reviewCount: 1 },
@@ -505,7 +500,7 @@ async function run() {
       }
       res.send(result);
     });
-    app.get("/reviews", async (req, res) => {
+    app.get("/reviews", verifyToken, verifyAdmin, async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
     });
@@ -535,9 +530,6 @@ async function run() {
     app.get("/stat", async (req, res) => {
       const users = await userCollection.estimatedDocumentCount();
       const parcels = await parcelCollection.estimatedDocumentCount();
-      // const query = await parcelCollection.find
-      // const query = await parcelCollection.find({status: "Delivered"}).toArray();
-      // console.log(query);
 
       const delivered = await parcelCollection.countDocuments({
         status: "Delivered",
@@ -546,9 +538,6 @@ async function run() {
     });
 
     // await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
